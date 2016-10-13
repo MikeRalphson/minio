@@ -49,7 +49,7 @@ func newHash(algo string) hash.Hash {
 
 // hashSum calculates the hash of the entire path and returns.
 func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	// Allocate staging buffer of 128KiB for copyBuffer.
+	// Allocate staging buffer of 2MiB for copyBuffer.
 	buf := make([]byte, readSizeV1)
 
 	// Copy entire buffer to writer.

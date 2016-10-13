@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -42,6 +43,7 @@ type posix struct {
 	ioErrCount  int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	diskPath    string
 	minFreeDisk int64
+	pool        sync.Pool
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -102,6 +104,12 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	fs := &posix{
 		diskPath:    diskPath,
 		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
+		pool: sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, 1*1024*1024)
+				return &b
+			},
+		},
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -592,8 +600,13 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// Close upon return.
 	defer w.Close()
 
-	// Return io.Copy
-	_, err = io.Copy(w, bytes.NewReader(buf))
+	bufp := s.pool.Get().(*[]byte)
+
+	// Reuse buffer.
+	defer s.pool.Put(bufp)
+
+	// Return io.CopyBuffer
+	_, err = io.CopyBuffer(w, bytes.NewReader(buf), *bufp)
 	return err
 }
 
